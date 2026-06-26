@@ -22,8 +22,6 @@ local Window = Rayfield:CreateWindow({
     KeySystem = false
 })
 
-Window:Hide()
-
 -- SERVICES
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
