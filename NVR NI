@@ -5,13 +5,48 @@ getgenv().NoobIncremental.Id = getgenv().NoobIncremental.Id + 1
 local Session = getgenv().NoobIncremental.Id
 
 local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
+
+local DarkPink = {
+    TextColor = Color3.fromRGB(245, 230, 238),
+    Background = Color3.fromRGB(30, 20, 26),
+    Topbar = Color3.fromRGB(42, 28, 36),
+    Shadow = Color3.fromRGB(20, 12, 18),
+    NotificationBackground = Color3.fromRGB(20, 12, 18),
+    NotificationActionsBackground = Color3.fromRGB(230, 210, 220),
+    TabBackground = Color3.fromRGB(58, 38, 48),
+    TabStroke = Color3.fromRGB(65, 45, 55),
+    TabBackgroundSelected = Color3.fromRGB(210, 60, 120),
+    TabTextColor = Color3.fromRGB(240, 230, 236),
+    SelectedTabTextColor = Color3.fromRGB(245, 235, 240),
+    ElementBackground = Color3.fromRGB(36, 25, 31),
+    ElementBackgroundHover = Color3.fromRGB(46, 32, 39),
+    SecondaryElementBackground = Color3.fromRGB(28, 19, 24),
+    ElementStroke = Color3.fromRGB(56, 40, 50),
+    SecondaryElementStroke = Color3.fromRGB(40, 28, 35),
+    SliderBackground = Color3.fromRGB(210, 55, 115),
+    SliderProgress = Color3.fromRGB(210, 55, 115),
+    SliderStroke = Color3.fromRGB(230, 75, 135),
+    ToggleBackground = Color3.fromRGB(30, 22, 27),
+    ToggleEnabled = Color3.fromRGB(220, 50, 120),
+    ToggleDisabled = Color3.fromRGB(100, 80, 86),
+    ToggleEnabledStroke = Color3.fromRGB(240, 70, 140),
+    ToggleDisabledStroke = Color3.fromRGB(125, 105, 110),
+    ToggleEnabledOuterStroke = Color3.fromRGB(100, 80, 90),
+    ToggleDisabledOuterStroke = Color3.fromRGB(65, 55, 60),
+    DropdownSelected = Color3.fromRGB(40, 28, 35),
+    DropdownUnselected = Color3.fromRGB(30, 22, 27),
+    InputBackground = Color3.fromRGB(30, 22, 27),
+    InputStroke = Color3.fromRGB(66, 48, 58),
+    PlaceholderColor = Color3.fromRGB(178, 150, 160)
+}
+
 local Window = Rayfield:CreateWindow({
     Name = "Noob Incremental & Voidsteel",
     Icon = 0,
     LoadingTitle = "Rayfield Interface Suite",
     LoadingSubtitle = "by NVR",
     ShowText = "Open Menu",
-    Theme = "Default",
+    Theme = DarkPink,
     ToggleUIKeybind = "K",
     ConfigurationSaving = {
         Enabled = true,
@@ -175,6 +210,7 @@ local function moveToTarget(targetPos)
 end
 
 -- TABS
+local _defaultTab = Window:CreateTab("", "circle")
 local miningTab = Window:CreateTab("Mining", "pickaxe")
 local hatchTab = Window:CreateTab("Hatching", "flask-conical")
 local autoTab = Window:CreateTab("Automation", "bot")
