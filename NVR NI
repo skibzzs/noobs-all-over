@@ -77,6 +77,8 @@ local autoFarmOre, hybridFarmEnabled = false, false
 local antiAfkEnabled = false
 local autoHatch, nukeAnimations = false, false
 local autoGainWater, autoGainFire = false, false
+local rollingEventRunes, kickFootball = false, false
+local selectedEventRunesToRoll = {}
 
 local wheatHarvestTime = 1
 local iceConvertNum = nil
@@ -97,6 +99,8 @@ local customRuneDelay = -1
 local customTierDelay = -1
 local waterGainDelay = 0.1
 local fireGainDelay = 0.1
+local customEventRuneDelay = -1
+local kickFootballDelay = 0.1
 
 -- SAFE MODE VARIABLES
 local safeModeEnabled = false
@@ -130,6 +134,17 @@ local function notify(title, content, duration)
     pcall(function()
         Rayfield:Notify({ Title = title, Content = content, Duration = duration or 5, Image = "rewind" })
     end)
+end
+
+-- PERF: cached remote fire, avoids per-loop closure allocation + repeated indexing
+local function safeFire(remote, ...)
+    if remote then
+        pcall(remote.FireServer, remote, ...)
+    end
+end
+
+local function RollRuneFast(runeName)
+    safeFire(RE_Main, "RollRune", runeName)
 end
 
 local function enforceSafeMode()
@@ -211,10 +226,10 @@ end
 
 -- TABS
 local _defaultTab = Window:CreateTab("", "circle")
-local miningTab = Window:CreateTab("Mining", "pickaxe")
-local hatchTab = Window:CreateTab("Hatching", "flask-conical")
 local autoTab = Window:CreateTab("Automation", "bot")
-local questTab = Window:CreateTab("Quest", "scroll-text")
+local eventTab = Window:CreateTab("Event", "star")
+local hatchTab = Window:CreateTab("Hatching", "flask-conical")
+local miningTab = Window:CreateTab("Mining", "pickaxe")
 local miscTab = Window:CreateTab("Misc", "grid-2x2")
 
 -- MINING TAB 
@@ -410,7 +425,7 @@ hatchTab:CreateToggle({
         autoHatch = Value
         task.spawn(function()
             while Session == getgenv().NoobIncremental.Id and autoHatch do
-                if RE_Main then pcall(function() RE_Main:FireServer(remoteCommand, targetCapsule) end) end
+                safeFire(RE_Main, remoteCommand, targetCapsule)
                 if hatchDelay > 0 then task.wait(hatchDelay) else task.wait(0.03) end
             end
         end)
@@ -420,7 +435,7 @@ hatchTab:CreateToggle({
 -- AUTOMATION TAB
 autoTab:CreateDropdown({
     Name = "Rune Selection",
-    Options = { "Basic", "Super", "Advanced", "Cosmic Prism", "Hacker", "Snowy", "Deepcore", "Football" },
+    Options = { "Basic", "Super", "Advanced", "Cosmic Prism", "Hacker", "Snowy", "Deepcore" },
     CurrentOption = {},
     MultipleOptions = true,
     Flag = "SelectedRunes_Dropdown",
@@ -445,23 +460,32 @@ autoTab:CreateToggle({
     Callback = function(Value)
         rollingRunes = Value
         task.spawn(function()
+            local cachedSpeed = 0.5
+            local speedCheckTick = 0
             while Session == getgenv().NoobIncremental.Id and rollingRunes do
                 local tierSpeedNum = 0.5
                 if customRuneDelay ~= -1 then
                     tierSpeedNum = customRuneDelay
                 else
-                    if localPlayer.PlayerGui:FindFirstChild("Profile") then
-                        local profile = localPlayer.PlayerGui.Profile
-                        pcall(function()
-                            local speedStr = profile.Main.Frame.Main.ScrollingFrame.MainProfile.Profile.Stats.RuneSpeed.Amount.Text
-                            tierSpeedNum = tonumber(speedStr:match("%d*%.?%d+")) or 0.5
-                        end)
+                    speedCheckTick = speedCheckTick + 1
+                    if speedCheckTick >= 20 then
+                        speedCheckTick = 0
+                        local profile = localPlayer.PlayerGui:FindFirstChild("Profile")
+                        if profile then
+                            local ok, speedStr = pcall(function()
+                                return profile.Main.Frame.Main.ScrollingFrame.MainProfile.Profile.Stats.RuneSpeed.Amount.Text
+                            end)
+                            if ok and speedStr then
+                                cachedSpeed = tonumber(speedStr:match("%d*%.?%d+")) or cachedSpeed
+                            end
+                        end
                     end
+                    tierSpeedNum = cachedSpeed
                 end
 
                 if #selectedRunesToRoll > 0 and RE_Main then
-                    for _, rune in pairs(selectedRunesToRoll) do
-                        pcall(function() RE_Main:FireServer("RollRune", rune) end)
+                    for i = 1, #selectedRunesToRoll do
+                        RollRuneFast(selectedRunesToRoll[i])
                     end
                 end
                 task.wait(tierSpeedNum)
@@ -490,18 +514,27 @@ autoTab:CreateToggle({
     Callback = function(Value)
         rollingTiers = Value
         task.spawn(function()
+            local cachedSpeed = 0.5
+            local speedCheckTick = 0
             while Session == getgenv().NoobIncremental.Id and rollingTiers do
                 local tierSpeedNum = 0.5
                 if customTierDelay ~= -1 then
                     tierSpeedNum = customTierDelay
                 else
-                    pcall(function()
-                        local tierSpeed = workspace.__GAME_CONTENT.Contents["WORLD - 1"].TierRollButton.Design.Design3.SurfaceGui.TierSpeed.Boost
-                        tierSpeedNum = tonumber(tierSpeed.Text:match("%d*%.?%d+")) or 0.5
-                    end)
+                    speedCheckTick = speedCheckTick + 1
+                    if speedCheckTick >= 20 then
+                        speedCheckTick = 0
+                        local ok, tierSpeedText = pcall(function()
+                            return workspace.__GAME_CONTENT.Contents["WORLD - 1"].TierRollButton.Design.Design3.SurfaceGui.TierSpeed.Boost.Text
+                        end)
+                        if ok and tierSpeedText then
+                            cachedSpeed = tonumber(tierSpeedText:match("%d*%.?%d+")) or cachedSpeed
+                        end
+                    end
+                    tierSpeedNum = cachedSpeed
                 end
 
-                if RE_Main then pcall(function() RE_Main:FireServer("RollTier") end) end
+                safeFire(RE_Main, "RollTier")
                 task.wait(tierSpeedNum)
             end
         end)
@@ -529,11 +562,7 @@ autoTab:CreateToggle({
         autoGainWater = Value
         task.spawn(function()
             while Session == getgenv().NoobIncremental.Id and autoGainWater do
-                if RE_Main then 
-                    pcall(function() 
-                        RE_Main:FireServer("GainWater") 
-                    end) 
-                end
+                safeFire(RE_Main, "GainWater")
                 task.wait(waterGainDelay)
             end
         end)
@@ -559,11 +588,7 @@ autoTab:CreateToggle({
         autoGainFire = Value
         task.spawn(function()
             while Session == getgenv().NoobIncremental.Id and autoGainFire do
-                if RE_Main then 
-                    pcall(function() 
-                        RE_Main:FireServer("GainFire")
-                    end) 
-                end
+                safeFire(RE_Main, "GainFire")
                 task.wait(fireGainDelay)
             end
         end)
@@ -645,8 +670,8 @@ autoTab:CreateToggle({
                         local water = tonumber(currentWater.Amount["1"].Value)
                         local buttonNumber = tonumber(selectedButton)
 
-                        if water and cost and water >= cost and RE_Main then
-                            pcall(function() RE_Main:FireServer("PressButton", buttonNumber) end)
+                        if water and cost and water >= cost then
+                            safeFire(RE_Main, "PressButton", buttonNumber)
                         end
                     end
                 end
@@ -676,24 +701,28 @@ autoTab:CreateToggle({
     Callback = function(Value)
         hittingTree = Value
         task.spawn(function()
+            local prestigeChecked = false
+            local prestigeVal = 0
             while Session == getgenv().NoobIncremental.Id and hittingTree do
-                local prestigeVal = 0
-                if localPlayer:FindFirstChild("FEATURES") and localPlayer.FEATURES:FindFirstChild("PrestigeAmount") then
-                    prestigeVal = tonumber(localPlayer.FEATURES.PrestigeAmount.Value) or 0
+                if not prestigeChecked then
+                    if localPlayer:FindFirstChild("FEATURES") and localPlayer.FEATURES:FindFirstChild("PrestigeAmount") then
+                        prestigeVal = tonumber(localPlayer.FEATURES.PrestigeAmount.Value) or 0
+                    end
+                    prestigeChecked = true
                 end
 
                 if prestigeVal < 9 then
                     notify("Locked", "You dont have the Tree Unlocked. Needs prestige 9", 3)
                     task.wait(2)
                 else
-                    pcall(function()
-                        local isTreeSpawned = localPlayer.FEATURES.TREE.IsSpawned
-                        if isTreeSpawned.Value and RE_Main then
-                            RE_Main:FireServer("HitTree")
-                        end
+                    local ok, isSpawned = pcall(function()
+                        return localPlayer.FEATURES.TREE.IsSpawned.Value
                     end)
+                    if ok and isSpawned then
+                        safeFire(RE_Main, "HitTree")
+                    end
+                    task.wait(hitTreeDelay)
                 end
-                task.wait(hitTreeDelay)
             end
         end)
     end
@@ -756,32 +785,101 @@ autoTab:CreateToggle({
         autoConvertAsh = Value
         task.spawn(function()
             while Session == getgenv().NoobIncremental.Id and autoConvertAsh do
-                if RE_Main then pcall(function() RE_Main:FireServer("ConvertWoodToAsh") end) end
+                safeFire(RE_Main, "ConvertWoodToAsh")
                 task.wait(convertAshDelay)
             end
         end)
     end
 })
 
--- QUEST TAB 
-questTab:CreateLabel(
-    "If the quest your looking for is not here check automation tab",
-    4483362458,
-    Color3.fromRGB(255, 255, 255),
-    false
-)
+-- EVENT TAB
+eventTab:CreateDropdown({
+    Name = "Event Rune Selection",
+    Options = { "Football" },
+    CurrentOption = {},
+    MultipleOptions = true,
+    Flag = "SelectedEventRunes_Dropdown",
+    Callback = function(Options) selectedEventRunesToRoll = Options end
+})
 
-questTab:CreateToggle({
-    Name = "Auto complete upgrade quest (AUTO UPGRADE REQUIRED)",
+eventTab:CreateInput({
+    Name = "Event Rune Roll Override Delay (Empty = Auto)",
+    PlaceholderText = "0.5",
+    RemoveTextAfterFocusLost = false,
+    Flag = "EventRuneDelay_Input",
+    Callback = function(Text) 
+        local num = tonumber(Text)
+        if num then customEventRuneDelay = num else customEventRuneDelay = -1 end
+    end
+})
+
+eventTab:CreateToggle({
+    Name = "Roll Selected Event Runes",
     CurrentValue = false,
-    Flag = "UpgradeQuest_Toggle",
+    Flag = "RollEventRunes_Toggle",
     Callback = function(Value)
-        autoUpgradeQuest = Value
+        rollingEventRunes = Value
         task.spawn(function()
-            if RE_Main then pcall(function() RE_Main:FireServer("SetUpgradeAutomationPaused", "Fire", false) end) end
-            while Session == getgenv().NoobIncremental.Id and autoUpgradeQuest do
-                if RE_Main then pcall(function() RE_Main:FireServer("Blaze") end) end
-                task.wait(5)
+            local cachedSpeed = 0.5
+            local speedCheckTick = 0
+            while Session == getgenv().NoobIncremental.Id and rollingEventRunes do
+                local tierSpeedNum = 0.5
+                if customEventRuneDelay ~= -1 then
+                    tierSpeedNum = customEventRuneDelay
+                else
+                    speedCheckTick = speedCheckTick + 1
+                    if speedCheckTick >= 20 then
+                        speedCheckTick = 0
+                        local profile = localPlayer.PlayerGui:FindFirstChild("Profile")
+                        if profile then
+                            local ok, speedStr = pcall(function()
+                                return profile.Main.Frame.Main.ScrollingFrame.MainProfile.Profile.Stats.RuneSpeed.Amount.Text
+                            end)
+                            if ok and speedStr then
+                                cachedSpeed = tonumber(speedStr:match("%d*%.?%d+")) or cachedSpeed
+                            end
+                        end
+                    end
+                    tierSpeedNum = cachedSpeed
+                end
+
+                if #selectedEventRunesToRoll > 0 and RE_Main then
+                    for i = 1, #selectedEventRunesToRoll do
+                        RollRuneFast(selectedEventRunesToRoll[i])
+                    end
+                end
+                task.wait(tierSpeedNum)
+            end
+        end)
+    end
+})
+
+eventTab:CreateDivider()
+
+eventTab:CreateInput({
+    Name = "Kick Football Delay",
+    PlaceholderText = "0.1",
+    RemoveTextAfterFocusLost = false,
+    Flag = "KickFootballDelay_Input",
+    Callback = function(Text) 
+        local num = tonumber(Text)
+        if num then kickFootballDelay = num end
+    end
+})
+
+eventTab:CreateToggle({
+    Name = "Kick Football",
+    CurrentValue = false,
+    Flag = "KickFootball_Toggle",
+    Callback = function(Value)
+        kickFootball = Value
+        task.spawn(function()
+            while Session == getgenv().NoobIncremental.Id and kickFootball do
+                pcall(function()
+                    local Event = game:GetService("ReplicatedStorage").__Net.AutoKick
+                    firesignal(Event.OnClientEvent, "7.007032343869336e10")
+                end)
+                task.wait(kickFootballDelay)
             end
         end)
     end
@@ -798,7 +896,7 @@ miscTab:CreateButton({
                 end
             end
         end
-        if RE_Main then pcall(function() RE_Main:FireServer("CheckAllFollows") end) end
+        safeFire(RE_Main, "CheckAllFollows")
     end
 })
 
@@ -822,6 +920,61 @@ miscTab:CreateToggle({
                 virtualUser:ClickButton2(Vector2.new())
             end)
         end)
+    end
+})
+
+miscTab:CreateLabel(
+    "If the quest your looking for is not here check automation tab",
+    4483362458,
+    Color3.fromRGB(255, 255, 255),
+    false
+)
+
+miscTab:CreateToggle({
+    Name = "Auto complete upgrade quest (AUTO UPGRADE REQUIRED)",
+    CurrentValue = false,
+    Flag = "UpgradeQuest_Toggle",
+    Callback = function(Value)
+        autoUpgradeQuest = Value
+        task.spawn(function()
+            safeFire(RE_Main, "SetUpgradeAutomationPaused", "Fire", false)
+            while Session == getgenv().NoobIncremental.Id and autoUpgradeQuest do
+                safeFire(RE_Main, "Blaze")
+                task.wait(5)
+            end
+        end)
+    end
+})
+
+miscTab:CreateButton({
+    Name = "Kill GUI",
+    Callback = function()
+        rollingRunes = false
+        rollingTiers = false
+        autoWheat = false
+        iceConverting = false
+        hittingTree = false
+        autoUpgradeQuest = false
+        autoDepostetWood = false
+        autoConvertAsh = false
+        autoFarmOre = false
+        hybridFarmEnabled = false
+        antiAfkEnabled = false
+        autoHatch = false
+        nukeAnimations = false
+        autoGainWater = false
+        autoGainFire = false
+        rollingEventRunes = false
+        kickFootball = false
+
+        if connections.AntiAfk then
+            connections.AntiAfk:Disconnect()
+            connections.AntiAfk = nil
+        end
+
+        getgenv().NoobIncremental.Id = getgenv().NoobIncremental.Id + 1
+
+        pcall(function() Rayfield:Destroy() end)
     end
 })
 
