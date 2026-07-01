@@ -368,7 +368,7 @@ miningTab:CreateToggle({
 -- HATCHING TAB
 hatchTab:CreateDropdown({
     Name = "Capsule Type",
-    Options = {"Classic", "Super"},
+    Options = {"Classic", "Super", "Football"},
     CurrentOption = {"Classic"},
     MultipleOptions = false,
     Flag = "CapsuleType",
