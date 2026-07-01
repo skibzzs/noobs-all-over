@@ -420,7 +420,7 @@ hatchTab:CreateToggle({
 -- AUTOMATION TAB
 autoTab:CreateDropdown({
     Name = "Rune Selection",
-    Options = { "Basic", "Super", "Advanced", "Cosmic Prism", "Hacker", "Snowy", "Deepcore" },
+    Options = { "Basic", "Super", "Advanced", "Cosmic Prism", "Hacker", "Snowy", "Deepcore", "Football" },
     CurrentOption = {},
     MultipleOptions = true,
     Flag = "SelectedRunes_Dropdown",
