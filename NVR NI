@@ -1,3 +1,4 @@
+task.wait(2)
 getgenv().VERSION = "0.6.7"
 getgenv().NoobIncremental = getgenv().NoobIncremental or { Id = 0 }
 getgenv().NoobIncremental.Id = getgenv().NoobIncremental.Id + 1
